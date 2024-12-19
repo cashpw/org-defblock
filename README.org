@@ -1,0 +1,4 @@
+:PROPERTIES:
+:LAST_MODIFIED: [2024-12-18 Wed 20:03]
+:END:
+#+title: org-defblock
