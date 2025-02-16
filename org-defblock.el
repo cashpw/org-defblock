@@ -252,25 +252,8 @@ Three example uses:
     `(progn
        (when ,(not (null link-display))
          (push (cons (quote ,name) ,link-display) org--block--link-display))
-       (list
-        ,(org--create-defmethod-of-defblock
-          name docstring (plist-get kwds :backend) kwds body)
-        ;; ⇨ The link type support
-        (eval
-         (backquote
-          (org-deflink
-           ,name
-           ,(vconcat
-             `[:help-echo (format "%s:%s\n\n%s" (quote ,name) o-label ,docstring)]
-             (or link-display (cdr (assoc name org--block--link-display))))
-           ;; s-replace-all `((,(format "@@%s:" backend) . "") ("#+end_export" . "") (,(format "#+begin_export %s" backend) . ""))
-           (s-replace-regexp
-            "@@" ""
-            (,(intern (format "org-block/%s" name))
-             o-backend
-             (or o-description o-label)
-             o-label
-             :o-link? t)))))))))
+       ,(org--create-defmethod-of-defblock
+         name docstring (plist-get kwds :backend) kwds body))))
 
 ;; WHERE ...
 
@@ -498,81 +481,198 @@ A full example:
                 ,@b (concat "#+begin_export\n" result "\n#+end_export"))))
        result)))
 
-(defun osbe--block-fontifications ()
-  "Yields a cons list of block type and language pairs.
+(cl-defmacro org-deflink
+    (name &optional docstring display &rest body)
+  "Make a new Org-link NAME that exports using form BODY.
 
-The intent is that the block types are fontified using the given language name."
-  (--map
-   (cons (symbol-name it) "org")
-   (-cons* 'tiny 'center 'quote org--supported-blocks)))
+Since Org links are essentially string-valued functions,
+a function ‘org-link/NAME’ is created.
 
-(defvar osbe--original-match-string (symbol-function 'match-string))
+DOCSTRING is optional; it is visible with
+   (documentation 'org-link/NAME)
 
-(cl-defun
-    osbe--match-string (n &optional str)
-  (let* ((block-type
-          (string-remove-prefix "_" (funcall osbe--original-match-string 4 str)))
-         (fontification (cdr (assoc block-type (osbe--block-fontifications)))))
-    ;; (message "%s - %s -> %s" n block-type fontification) ;; For debugging.
-    (if (and (equal n 7) fontification)
-        fontification
-      (funcall osbe--original-match-string n str))))
+BODY is a string-valued expression, that may make use of the names
+o-label, o-description, o-backend. The final one refers to the export
+backend, such as 'html or 'latex. The first two are obtained from uses:
 
-;; TODO: This should only be enabled when org-special-blocks-mode is enabled and otherwise should be removed.
-(advice-add
- 'org-fontify-meta-lines-and-blocks
- :around
- (lambda (fontify &rest args)
-   (cl-letf (((symbol-function 'match-string) #'osbe--match-string))
-     (apply fontify args))))
+   [[name:o-label][o-description]]
 
-(defvar org--html-export-style-choice "default"
-  "This variable holds the link label declared by users.
-  It is used in the hook to Org's reprocessing; `org--html-export-style-setup'.")
+In particular, the use case “name:o-label” means that o-description is nil.
 
-(defvar org-html-export-styles
-  `((default . "")
-    (bigblow
-     .
-     "#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-bigblow.setup")
-    (readtheorg
-     .
-     "#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-readtheorg.setup")
-    (rose
-     .
-     "#+HTML_HEAD: <link href=\"https://taopeng.me/org-notes-style/css/notes.css\" rel=\"stylesheet\" type=\"text/css\" />")
-    (latexcss
-     .
-     "#+HTML_HEAD: <link rel=\"stylesheet\" href=\"https://latex.now.sh/style.min.css\" />"))
-  "An alist of theme-to-setup pairs, symbols-to-strings, used by `org-link/html-export-style'.
+---------------------------------------------------------------------------
 
-  For live examples of many of the themes, see
-  https://olmon.gitlab.io/org-themes/.
+Example use:
 
-  In due time, I would like to add more, such as those linked from
-  the discussion https://news.ycombinator.com/item?id=23130104.
-  A nice, simple, opportunity for someone else to contribute.")
-;;
-;; Add a bunch more
-(cl-loop
- for theme in
- '(comfy_inline
-   imagine_light
-   rethink_inline
-   simple_whiteblue
-   retro_dark
-   simple_gray
-   solarized_dark
-   solarized_light
-   stylish_white)
- do
- (push
-  (cons
-   theme
-   (format
-    "#+SETUPFILE: https://gitlab.com/OlMon/org-themes/-/raw/master/src/%s/%s.theme"
-    theme theme))
-  org-html-export-styles))
+   ;; In a Lisp buffer, press “C-x C-e” to load this definition
+   (org-deflink shout (upcase (or o-description o-label)))
+
+   ;; In an Org-buffer, press “C-c C-e h o” to see how this exports
+   <shout: hello world!>
+
+   ;; Or using the bracket format
+   [[shout:][hello world!]]
+   [[shout: hello world!]]
+
+   ;; or using the plain format
+   shout:hello_world
+
+Here is a more complex, involved, example that makes use of
+‘:let’ for local declarations. For instance, “define:hello”
+renders as the word “hello” with a tooltip defining the word; the
+definition is obtained from the command line tool ‘wn’.
+
+  (org-deflink define
+    \"Define the given word using WordNet, along with synonyms and coordinate terms.\"
+    [:let (definition (shell-command-to-string (format \"wn %s -over -synsn -coorn\" o-label)))
+     :help-echo definition]
+    (--> definition
+      (s-replace-regexp \"\\\\\\\"\" \"''\" it) ;; The presence of ‘\\\"’ in tooltips breaks things, so omit them.
+      (s-replace-regexp \"\\n\" \"<br>\" it)
+      (format \"<abbr class=\\\"tooltip\\\" title=\\\"%s\\\">%s</abbr>\" it o-label)))
+
+For HTML tooltips, see `org-ospe-html-export-preserving-whitespace'.
+
+More generally, org-special-block-extra's “doc” link type
+supports, in order of precedence: User definitions, Emacs Lisp
+documentation of functions & variables, and definitions of
+English words. For example, “doc:existential_angst” for an entry
+‘existential_angst’ whose associated documentation-glossary is
+user-defined in a ‘#+documentation’ Org-block, or
+“doc:thread-first” for the Emacs Lisp documentation of the
+function `thread-first', or “doc:user-mail-address” for the Emacs
+Lisp documentation of the variable `user-mail-address', or
+“doc:hello” for the definition of the English word ‘hello’.
+
+DISPLAY is a vector consisting of key-value pairs that affects how the link
+is displayed in Emacs Org buffers. The keys are as follows.
+
++ :help-echo is a string-valued expression of the tooltip that should accompany
+  the new link in Org buffers. It has access to o-format being one of ‘plain’,
+  ‘angle’, ‘bracket’ which indicates the format of the link, as shown above.
+  It also has access to o-label and o-description.
+
+  By default, the tooltip is the link name followed by the documentation
+  of the link, and, finally, the HTML export of the link.
+  That way, upon hover, users can visually see the link contents,
+  know what/how the link exports, and actually see the HTML export.
+
+  That is to say, for the ‘shout’ example aboce, the default display is essentially:
+  [:help-echo (org-link/shout o-label o-description 'html)]
+
+  You may want to add the following to your Emacs init file:
+
+    ;; Nearly instantaneous display of tooltips.
+    (setq tooltip-delay 0)
+    ;; Give user 30 seconds before tooltip automatically disappears.
+    (setq tooltip-hide-delay 300)
+
++ :face specifies how should these links be displayed within Emacs.
+   It is a list-valued expression.
+   As usual, it may make use of O-LABEL (but O-DESCRIPTION has value nil).
+   Example:
+               :face '(:underline \"green\")
+
+   See https://www.gnu.org/software/emacs/manual/html_node/elisp/Face-Attributes.html
+
++ [:display 'full] if you do not want bracket links to be
+  folded away in Org buffers; i.e., “[[X][Y]]” does not render as just “Y”.
+
++ :follow is a form that is executed when you click on such links; e.g., to open
+   another buffer, browser, or other action. It makes use of (an implicit argument) ‘o-label’.
+   Be aware that ‘o-label’ is a string that may contain spaces; e.g., when the action is to open
+   a URL in a browser.
+
+   If you are in need of providing similar, related, actions on a single link
+   then your :follow can condition on the current prefix argument via ‘o-prefix’
+   (which is essentially `current-prefix-arg').
+   For instance, a user presses “C-u RET” on your link to do one thing
+   but “C-u 72 RET” to do another action.
+
++ :keymap is an alternating list of keys and actions to be
+  performed when those keys are pressed while point is on the link.
+  For example:
+      [:keymap (C-h (message-box \"hola\"))]
+
+  By default, C-n and C-p are for moving to next and previous occruances of the same link type.
+
++ :let is a list of alternating variable symbol name and value, which are then used to form
+  a concrete `let*' clause. This is useful for introducing local variables for use in the DISPLAY
+  as well as in the CONTENTS. Such local declarations may make use of O-LABEL and O-DESCRIPTION, as usual."
+  (cl-destructuring-bind (docstring display body)
+      (lf-extract-optionals-from-rest docstring #'stringp
+                                      display   #'vectorp
+                                      body)
+    (setq display (seq--into-list display))
+    (let ((org-link/NAME (intern (format "org-link/%s" name)))
+          (navigation "Press “C-h” to see possible actions on this link type.")
+          (lets (cl-loop for (variable value)
+                         on (cl-getf display :let)
+                         by #'cddr
+                         collect (list variable value))))
+      `(progn
+         ;; Declare the underlying function and documentation
+         (cl-defun ,org-link/NAME ;; function name
+             (o-label o-description o-backend)         ;; function args
+           ;; new function documentation
+           ,docstring
+           ;; function body
+           (let* ,lets ,@body))
+         ;; Construct the Org-link
+         (org-link-set-parameters
+          ,(format "%s" name)
+          :export (quote ,org-link/NAME)
+          ;; How should these links be displayed?
+          ;; (We augment the namespace with the missing o-description that local variables may be using.)
+          :face (lambda (o-label)  (let (o-description) (let* ,lets ,(cl-getf display :face))))
+          ;; When you click on such links, what should happen?
+          ;; (We augment the namespace with the missing o-description that local variables may be using.)
+          :follow (lambda (o-label o-prefix) (let (o-description) (let* ,lets ,(cl-getf display :follow))))
+          ;; These links should *never* be folded in descriptive display;
+          ;; i.e., “[[example:lable][description]]” will always appear verbatim
+          ;; and not hide the first pair […].
+          :display (cl-the symbol ,(cl-getf display :display)) ;; e.g.,: 'full
+          ;; Any special keybindings when cursour is on this link type?
+          ;; On ‘NAME:’ links, C-n/p to go to the next/previous such links.
+          :keymap (let ((o-keymap (copy-keymap org-mouse-map))
+                        (pattern (format "%s:" (quote ,name))))
+
+                    ;; If this Org-link has additional key bindings, then save
+                    ;; them in an alist for reference in `org-this-link-show-docs'.
+                    (when (quote ,(cl-getf display :keymap))
+                      (push (cons (format "%s" (quote ,name)) (quote ,(cl-getf display :keymap)))
+                            org-defblock-mode-map--link-keymap-docs))
+
+                    ;; Let's inherit some possibly useful key bindings.
+                    (set-keymap-parent o-keymap org-defblock-mode-map)
+
+                    ;; Populate the keymap
+                    (cl-loop for (key action) on (quote ,(cl-getf display :keymap))
+                             by #'cddr
+                             do (define-key o-keymap (kbd (format "%s" key))
+                                            `(lambda () (interactive) ,action)))
+                    ;; Return the keymap
+                    o-keymap)
+          ;; The tooltip alongside a link
+          :help-echo (lambda (window object position)
+                       (save-excursion
+                         (goto-char position)
+                         (-let* (((&plist :path :format :contents-begin :contents-end)
+                                  (cadr (org-element-context)))
+                                 (org-format format)
+                                 (o-label path)
+                                 (o-description
+                                  (when (equal format 'bracket)
+                                    (copy-region-as-kill contents-begin contents-end)
+                                    (substring-no-properties (car kill-ring)))))
+                           (or (let* ,lets ,(cl-getf display :help-echo))
+                               (format "%s:%s\n\n%s\nHTML Export:\n\n%s"
+                                       (quote ,name)
+                                       (or o-description o-label)
+                                       ,(concat (or docstring "") "\n\n" navigation "\n")
+                                       (,org-link/NAME o-label o-description 'html)))))))
+         ;; Return value is the name of the underlying function.
+         ;; We do this to be consistent with `defun'.
+         (quote ,org-link/NAME)))))
 
 (provide 'org-defblock)
 ;;; org-defblock.el ends here
