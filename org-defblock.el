@@ -15,10 +15,10 @@
 ;;
 ;;; Code:
 
-(require 's)               ;; “The long lost Emacs string manipulation library”
-(require 'dash)            ;; “A modern list library for Emacs”
-(require 'subr-x)          ;; Extra Lisp functions; e.g., ‘when-let’.
-(require 'cl-lib)          ;; New Common Lisp library; ‘cl-???’ forms.
+(require 's) ;; “The long lost Emacs string manipulation library”
+(require 'dash) ;; “A modern list library for Emacs”
+(require 'subr-x) ;; Extra Lisp functions; e.g., ‘when-let’.
+(require 'cl-lib) ;; New Common Lisp library; ‘cl-???’ forms.
 
 (require 'cus-edit) ;; To get the custom-* faces
 
@@ -41,13 +41,16 @@
   "Provide 30 new custom blocks & 34 link types for Org-mode.
 
 All relevant Lisp functions are prefixed ‘org-’; e.g., `org-docs-insert'."
-  :lighter " OSPE"
+  :lighter
+  " OSPE"
   (if org-special-block-extras-mode
       (progn
         ;; https://orgmode.org/manual/Advanced-Export-Configuration.html
-        (add-hook 'org-export-before-parsing-hook 'org--support-special-blocks-with-args)
+        (add-hook
+         'org-export-before-parsing-hook 'org--support-special-blocks-with-args)
         (setq org-export-allow-bind-keywords t))
-    (remove-hook 'org-export-before-parsing-hook 'org--support-special-blocks-with-args)))
+    (remove-hook
+     'org-export-before-parsing-hook 'org--support-special-blocks-with-args)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; We define a parent keymap that org-deflink keymaps inherit from.
@@ -91,7 +94,8 @@ Alternatively, if you don't find much value in these basic bindings, you can rem
       (backward-word 2)
       (unless (= working-line (line-number-at-pos))
         (goto-line working-line))
-      (let* ((here-to-eol (buffer-substring-no-properties (point) (point-at-eol)))
+      (let* ((here-to-eol
+              (buffer-substring-no-properties (point) (point-at-eol)))
              ;; E.g., “kbd:”, the name part of an Org link
              (link-name (cl-second (s-match "\\([^ ]+:\\).+" here-to-eol))))
         link-name))))
@@ -109,19 +113,23 @@ Alternatively, if you don't find much value in these basic bindings, you can rem
 
                      Press ‘q’ to kill the resulting buffer and window."
   (interactive)
-  (let* ((link (s-chop-suffix ":" (org-link-at-point)))
-         (msg (ignore-errors
-                (concat
-                 (documentation (intern (format "org-link/%s" link)))
-                 "\nKEY BINDINGS:\n"
-                 "\nUnless indicated below otherwise..."
-                 "\n\tC-h: Shows this helpful message buffer"
-                 "\n\tC-n/C-p on the link to jump to next/previous links of this type;"
-                 "\n\tC-c C-x C-n/p for moving between arbitrary link types.\n\n"
-                 (pp-to-string
-                  (cdr (assoc link org-special-block-extras-mode-map--link-keymap-docs))))))
-         ;; i.e., insist on displaying in a dedicated buffer
-         (max-mini-window-height 0))
+  (let*
+      ((link (s-chop-suffix ":" (org-link-at-point)))
+       (msg
+        (ignore-errors
+          (concat
+           (documentation (intern (format "org-link/%s" link)))
+           "\nKEY BINDINGS:\n"
+           "\nUnless indicated below otherwise..."
+           "\n\tC-h: Shows this helpful message buffer"
+           "\n\tC-n/C-p on the link to jump to next/previous links of this type;"
+           "\n\tC-c C-x C-n/p for moving between arbitrary link types.\n\n"
+           (pp-to-string
+            (cdr
+             (assoc
+              link org-special-block-extras-mode-map--link-keymap-docs))))))
+       ;; i.e., insist on displaying in a dedicated buffer
+       (max-mini-window-height 0))
     (display-message-or-buffer msg)
     (switch-to-buffer-other-window "*Message*")
     (rename-buffer (format "Help: Org Link “%s”" link))
@@ -130,15 +138,17 @@ Alternatively, if you don't find much value in these basic bindings, you can rem
     (message "Read-only; “q” to kill buffer and window.")))
 
 (define-key org-special-block-extras-mode-map (kbd "C-n") #'org-this-link-next)
-(define-key org-special-block-extras-mode-map (kbd "C-p") #'org-this-link-previous)
-(define-key org-special-block-extras-mode-map (kbd "C-h") #'org-this-link-show-docs)
+(define-key
+ org-special-block-extras-mode-map (kbd "C-p") #'org-this-link-previous)
+(define-key
+ org-special-block-extras-mode-map (kbd "C-h") #'org-this-link-show-docs)
 
 
 (defvar org--supported-blocks nil
   "Which special blocks, defined with DEFBLOCK, are supported.")
 
-(cl-defmacro org-defblock
-    (name kwds &optional link-display docstring &rest body)
+(cl-defmacro
+    org-defblock (name kwds &optional link-display docstring &rest body)
   "Declare a new special block, and link, in the style of DEFUN.
 
 A full featured example is at the end of this documentation string.
@@ -239,24 +249,37 @@ Three example uses:
     "Association list of block name symbols to link display vectors.")
 
   ;; Identify which of the optional features is present...
-  (cl-destructuring-bind (link-display docstring body)
-      (lf-extract-optionals-from-rest link-display #'vectorp
-                                      docstring    #'stringp
-                                      body)
+  (cl-destructuring-bind
+      (link-display docstring body)
+      (lf-extract-optionals-from-rest
+       link-display #'vectorp docstring #'stringp body)
     `(progn
-       (when ,(not (null link-display)) (push (cons (quote ,name) ,link-display) org--block--link-display))
+       (when ,(not (null link-display))
+         (push (cons (quote ,name) ,link-display) org--block--link-display))
        (list
-        ,(org--create-defmethod-of-defblock name docstring (plist-get kwds :backend) kwds body)
+        ,(org--create-defmethod-of-defblock
+          name docstring (plist-get kwds :backend) kwds body)
         ;; ⇨ The link type support
-        (eval (backquote (org-deflink ,name
-                          ,(vconcat `[:help-echo (format "%s:%s\n\n%s" (quote ,name) o-label ,docstring)] (or link-display (cdr (assoc name org--block--link-display))))
-                          ;; s-replace-all `((,(format "@@%s:" backend) . "") ("#+end_export" . "") (,(format "#+begin_export %s" backend) . ""))
-                          (s-replace-regexp "@@" ""
-                                            (,(intern (format "org-block/%s" name)) o-backend (or o-description o-label) o-label :o-link? t)))))))))
+        (eval
+         (backquote
+          (org-deflink
+           ,name
+           ,(vconcat
+             `[:help-echo (format "%s:%s\n\n%s" (quote ,name) o-label ,docstring)]
+             (or link-display (cdr (assoc name org--block--link-display))))
+           ;; s-replace-all `((,(format "@@%s:" backend) . "") ("#+end_export" . "") (,(format "#+begin_export %s" backend) . ""))
+           (s-replace-regexp
+            "@@" ""
+            (,(intern (format "org-block/%s" name))
+             o-backend
+             (or o-description o-label)
+             o-label
+             :o-link? t)))))))))
 
 ;; WHERE ...
 
-(cl-defmethod org--create-defmethod-of-defblock ((name symbol) docstring backend-type (kwds list) (body list))
+(cl-defmethod org--create-defmethod-of-defblock
+  ((name symbol) docstring backend-type (kwds list) (body list))
   "Helper method to produce an associated Lisp function for org-defblock.
 
 + NAME: The name of the block type.
@@ -271,40 +294,63 @@ Three example uses:
         (kwds (cddr kwds)))
     ;; Unless we've already set the docs for the generic function, don't re-declare it.
     `(if ,(null body)
-         (cl-defgeneric ,(intern (format "org-block/%s" name)) (backend raw-contents &rest _)
+         (cl-defgeneric ,(intern (format "org-block/%s" name))
+             (backend raw-contents &rest _)
            ,docstring)
 
        (cl-defmethod ,(intern (format "org-block/%s" name))
-         ((backend ,(if backend-type `(eql ,backend-type) t))
+         ((backend
+           ,(if backend-type
+                `(eql ,backend-type)
+              t))
           (raw-contents string)
           &optional
           ,main-arg-name
-          &rest _
-          &key (o-link? nil) ,@(--reject (keywordp (car it)) (-partition 2 kwds))
+          &rest
+          _
+          &key
+          (o-link? nil)
+          ,@
+          (--reject (keywordp (car it)) (-partition 2 kwds))
           &allow-other-keys)
          ,docstring
          ;; Use default for main argument
          (when (and ',main-arg-name (s-blank-p ,main-arg-name))
-           (--if-let (plist-get (cdr (assoc ',name org--header-args)) :main-arg)
+           (--if-let (plist-get
+                      (cdr (assoc ',name org--header-args))
+                      :main-arg)
                (setq ,main-arg-name it)
              (setq ,main-arg-name ,main-arg-value)))
 
-         (cl-letf (((symbol-function 'org-export)
-                    (lambda (x) "Wrap the given X in an export block for the current backend."
-                      (if o-link? x (format "#+begin_export %s \n%s\n#+end_export" backend x))))
-                   ((symbol-function 'org-parse)
-                    (lambda (x) "This should ONLY be called within an ORG-EXPORT call."
-                      (if o-link? x (format "\n#+end_export\n%s\n#+begin_export %s\n" x backend)))))
+         (cl-letf
+             (((symbol-function 'org-export)
+               (lambda (x)
+                 "Wrap the given X in an export block for the current backend."
+                 (if o-link?
+                     x
+                   (format "#+begin_export %s \n%s\n#+end_export" backend x))))
+              ((symbol-function 'org-parse)
+               (lambda (x)
+                 "This should ONLY be called within an ORG-EXPORT call."
+                 (if o-link?
+                     x
+                   (format "\n#+end_export\n%s\n#+begin_export %s\n"
+                           x
+                           backend)))))
 
            ;; Use any headers for this block type, if no local value is passed
-           ,@(cl-loop for k in (mapcar #'car (-partition 2 kwds))
-                      collect `(--when-let (plist-get (cdr (assoc ',name org--header-args))
-                                                      ,(intern (format ":%s" k)))
-                                 (when (s-blank-p ,k)
-                                   (setq ,k it))))
+           ,@
+           (cl-loop
+            for k in (mapcar #'car (-partition 2 kwds)) collect
+            `(--when-let (plist-get
+                          (cdr (assoc ',name org--header-args))
+                          ,(intern (format ":%s" k)))
+               (when (s-blank-p ,k)
+                 (setq ,k it))))
 
            (org-export
-            (let ((contents (org-parse raw-contents))) ,@body)))))))
+            (let ((contents (org-parse raw-contents)))
+              ,@body)))))))
 
 (defun org--pp-list (xs)
   "Given XS as (x₁ x₂ … xₙ), yield the string “x₁ x₂ … xₙ”, no parens.
@@ -320,54 +366,61 @@ and used by DEFBLOCK.")
   "Remove all headlines in the current buffer.
 BACKEND is the export back-end being used, as a symbol."
   (setq org--current-backend backend)
-  (let (blk-start        ;; The point at which the user's block begins.
-        header-start ;; The point at which the user's block header & args begin.
-        kwdargs          ;; The actual key-value arguments for the header.
-        main-arg         ;; The first (non-keyed) value to the block.
-        blk-column       ;; The column at which the user's block begins.
-        body-start       ;; The starting line of the user's block.
-        blk-contents         ;; The actual body string.
-        ;; ⟨blk-start/column⟩#+begin_⟨header-start⟩blk main-arg :key₀ val ₀ … :keyₙ valₙ  ;; ⟵ ⟨kwdargs⟩
-        ;; ⟨body-start⟩ body
-        ;; #+end_blk
-        )
-    (cl-loop for blk in org--supported-blocks
-             do (goto-char (point-min))
-             (while (ignore-errors (re-search-forward (format "^\s*\\#\\+begin_%s" blk)))
-               ;; MA: HACK: Instead of a space, it should be any non-whitespace, optionally;
-               ;; otherwise it may accidentlly rewrite blocks with one being a prefix of the other!
-               (setq header-start (point))
-               ;; Save indentation
-               (re-search-backward (format "\\#\\+begin_%s" blk))
-               (setq blk-start (point))
-               (setq blk-column (current-column))
-               ;; actually process body
-               (goto-char header-start)
-               (setq body-start (1+ (line-end-position)))
-               (thread-last
-                 (buffer-substring-no-properties header-start (line-end-position))
-                 (format "(%s)")
-                 read
-                 (--split-with (not (keywordp it)))
-                 (setq kwdargs))
-               (setq main-arg (org--pp-list (car kwdargs)))
-               (setq kwdargs (cadr kwdargs))
-               (forward-line -1)
-               (re-search-forward (format "^\s*\\#\\+end_%s" blk))
-               (setq blk-contents (buffer-substring-no-properties body-start (line-beginning-position)))
-               (kill-region blk-start (point))
-               (insert (eval `(,(intern (format "org-block/%s" blk))
-                               (quote ,backend)
-                               ,blk-contents
-                               ,main-arg
-                               ,@(--map (list 'quote it) kwdargs))))
-               ;; See: https://github.com/alhassy/org-special-block-extras/issues/8
-               ;; (indent-region blk-start (point) blk-column) ;; Actually, this may be needed...
-               ;; (indent-line-to blk-column) ;; #+end...
-               ;; (goto-char blk-start) (indent-line-to blk-column) ;; #+begin...
-               ;; the --map is so that arguments may be passed
-               ;; as "this" or just ‘this’ (raw symbols)
-               ))))
+  (let
+      (blk-start ;; The point at which the user's block begins.
+       header-start ;; The point at which the user's block header & args begin.
+       kwdargs ;; The actual key-value arguments for the header.
+       main-arg ;; The first (non-keyed) value to the block.
+       blk-column ;; The column at which the user's block begins.
+       body-start ;; The starting line of the user's block.
+       blk-contents ;; The actual body string.
+       ;; ⟨blk-start/column⟩#+begin_⟨header-start⟩blk main-arg :key₀ val ₀ … :keyₙ valₙ  ;; ⟵ ⟨kwdargs⟩
+       ;; ⟨body-start⟩ body
+       ;; #+end_blk
+       )
+    (cl-loop
+     for blk in org--supported-blocks do (goto-char (point-min))
+     (while (ignore-errors
+              (re-search-forward (format "^\s*\\#\\+begin_%s" blk)))
+       ;; MA: HACK: Instead of a space, it should be any non-whitespace, optionally;
+       ;; otherwise it may accidentlly rewrite blocks with one being a prefix of the other!
+       (setq header-start (point))
+       ;; Save indentation
+       (re-search-backward (format "\\#\\+begin_%s" blk))
+       (setq blk-start (point))
+       (setq blk-column (current-column))
+       ;; actually process body
+       (goto-char header-start)
+       (setq body-start (1+ (line-end-position)))
+       (thread-last
+         (buffer-substring-no-properties header-start (line-end-position))
+         (format "(%s)")
+         read
+         (--split-with (not (keywordp it)))
+         (setq kwdargs))
+       (setq main-arg (org--pp-list (car kwdargs)))
+       (setq kwdargs (cadr kwdargs))
+       (forward-line -1)
+       (re-search-forward (format "^\s*\\#\\+end_%s" blk))
+       (setq blk-contents
+             (buffer-substring-no-properties
+              body-start (line-beginning-position)))
+       (kill-region blk-start (point))
+       (insert
+        (eval
+         `(,(intern (format "org-block/%s" blk))
+           (quote ,backend)
+           ,blk-contents
+           ,main-arg
+           ,@
+           (--map (list 'quote it) kwdargs))))
+       ;; See: https://github.com/alhassy/org-special-block-extras/issues/8
+       ;; (indent-region blk-start (point) blk-column) ;; Actually, this may be needed...
+       ;; (indent-line-to blk-column) ;; #+end...
+       ;; (goto-char blk-start) (indent-line-to blk-column) ;; #+begin...
+       ;; the --map is so that arguments may be passed
+       ;; as "this" or just ‘this’ (raw symbols)
+       ))))
 
 (defvar org--header-args nil
   "Alist (name plist) where “:main-arg” is a special plist key.
@@ -391,7 +444,9 @@ A full, working, example can be seen by “C-h o RET defblock”.
 "
   `(add-to-list 'org--header-args (list (quote ,blk) ,@kvs)))
 
-(cl-defmacro org--blockcall (blk &optional main-arg &rest keyword-args-then-contents)
+(cl-defmacro
+    org--blockcall
+    (blk &optional main-arg &rest keyword-args-then-contents)
   "An anaologue to `funcall` but for blocks.
 
 Usage: (blockcall blk-name main-arg even-many:key-values raw-contents)
@@ -399,12 +454,14 @@ Usage: (blockcall blk-name main-arg even-many:key-values raw-contents)
 One should rarely use this directly; instead use
 o-thread-blockcall.
 "
-  `(concat "#+end_export\n" (,(intern (format "org-block/%s" blk))
-                             backend ;; defblock internal
+  `(concat
+    "#+end_export\n"
+    (,(intern (format "org-block/%s" blk))
+     backend ;; defblock internal
                                         ; (format "\n#+begin_export html\n\n%s\n#+end_export\n" ,(car (last keyword-args-then-contents))) ;; contents
-                             ,@(last keyword-args-then-contents) ;; contents
-                             ,main-arg
-                             ,@(-drop-last 1 keyword-args-then-contents)) "\n#+begin_export"))
+     ,@ (last keyword-args-then-contents) ;; contents
+     ,main-arg ,@ (-drop-last 1 keyword-args-then-contents))
+    "\n#+begin_export"))
 
 (defmacro org-thread-blockcall (body &rest forms)
   "Thread text through a number of blocks.
@@ -433,26 +490,32 @@ A full example:
                         (box (format \"⇨ %s ⇦\" name) :background-color \"blue\")
                         ))
 "
-  (if (not forms) body
-    `(-let [result (org--blockcall ,@(car forms) ,body)]
-       ,@(cl-loop for b in (cdr forms)
-                  collect `(setq result (org--blockcall ,@b
-                                                        (concat
-                                                         "#+begin_export\n"
-                                                         result
-                                                         "\n#+end_export"
-                                                         )))) result)))
+  (if (not forms)
+      body
+    `(-let [result
+            (org--blockcall ,@ (car forms) ,body)]
+       ,@
+       (cl-loop
+        for b in (cdr forms) collect
+        `(setq result
+               (org--blockcall
+                ,@b (concat "#+begin_export\n" result "\n#+end_export"))))
+       result)))
 
 (defun osbe--block-fontifications ()
   "Yields a cons list of block type and language pairs.
 
 The intent is that the block types are fontified using the given language name."
-  (--map (cons (symbol-name it) "org") (-cons* 'tiny 'center 'quote  org--supported-blocks)))
+  (--map
+   (cons (symbol-name it) "org")
+   (-cons* 'tiny 'center 'quote org--supported-blocks)))
 
 (defvar osbe--original-match-string (symbol-function 'match-string))
 
-(cl-defun osbe--match-string (n &optional str)
-  (let* ((block-type (string-remove-prefix "_" (funcall osbe--original-match-string 4 str)))
+(cl-defun
+    osbe--match-string (n &optional str)
+  (let* ((block-type
+          (string-remove-prefix "_" (funcall osbe--original-match-string 4 str)))
          (fontification (cdr (assoc block-type (osbe--block-fontifications)))))
     ;; (message "%s - %s -> %s" n block-type fontification) ;; For debugging.
     (if (and (equal n 7) fontification)
@@ -460,10 +523,12 @@ The intent is that the block types are fontified using the given language name."
       (funcall osbe--original-match-string n str))))
 
 ;; TODO: This should only be enabled when org-special-blocks-mode is enabled and otherwise should be removed.
-(advice-add 'org-fontify-meta-lines-and-blocks
-            :around (lambda (fontify &rest args)
-                      (cl-letf (((symbol-function 'match-string) #'osbe--match-string))
-                        (apply fontify args))))
+(advice-add
+ 'org-fontify-meta-lines-and-blocks
+ :around
+ (lambda (fontify &rest args)
+   (cl-letf (((symbol-function 'match-string) #'osbe--match-string))
+     (apply fontify args))))
 
 (defvar org--html-export-style-choice "default"
   "This variable holds the link label declared by users.
@@ -471,10 +536,18 @@ The intent is that the block types are fontified using the given language name."
 
 (defvar org-html-export-styles
   `((default . "")
-    (bigblow . "#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-bigblow.setup")
-    (readtheorg . "#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-readtheorg.setup")
-    (rose . "#+HTML_HEAD: <link href=\"https://taopeng.me/org-notes-style/css/notes.css\" rel=\"stylesheet\" type=\"text/css\" />")
-    (latexcss . "#+HTML_HEAD: <link rel=\"stylesheet\" href=\"https://latex.now.sh/style.min.css\" />"))
+    (bigblow
+     .
+     "#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-bigblow.setup")
+    (readtheorg
+     .
+     "#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-readtheorg.setup")
+    (rose
+     .
+     "#+HTML_HEAD: <link href=\"https://taopeng.me/org-notes-style/css/notes.css\" rel=\"stylesheet\" type=\"text/css\" />")
+    (latexcss
+     .
+     "#+HTML_HEAD: <link rel=\"stylesheet\" href=\"https://latex.now.sh/style.min.css\" />"))
   "An alist of theme-to-setup pairs, symbols-to-strings, used by `org-link/html-export-style'.
 
   For live examples of many of the themes, see
@@ -485,11 +558,25 @@ The intent is that the block types are fontified using the given language name."
   A nice, simple, opportunity for someone else to contribute.")
 ;;
 ;; Add a bunch more
-(cl-loop for theme in '(comfy_inline imagine_light
-                        rethink_inline simple_whiteblue
-                        retro_dark simple_gray solarized_dark
-                        solarized_light stylish_white)
-         do (push (cons theme (format "#+SETUPFILE: https://gitlab.com/OlMon/org-themes/-/raw/master/src/%s/%s.theme" theme theme)) org-html-export-styles))
+(cl-loop
+ for theme in
+ '(comfy_inline
+   imagine_light
+   rethink_inline
+   simple_whiteblue
+   retro_dark
+   simple_gray
+   solarized_dark
+   solarized_light
+   stylish_white)
+ do
+ (push
+  (cons
+   theme
+   (format
+    "#+SETUPFILE: https://gitlab.com/OlMon/org-themes/-/raw/master/src/%s/%s.theme"
+    theme theme))
+  org-html-export-styles))
 
 (provide 'org-defblock)
 ;;; org-defblock.el ends here
