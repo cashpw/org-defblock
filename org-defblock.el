@@ -5,7 +5,7 @@
 ;; Version: 0.0.1
 ;; Keywords: org, blocks, colors, convenience
 ;; Homepage: https://github.com/cashweaver/org-defblock
-;; Package-Requires: ((s "1.13.1") (dash "2.18.1") (emacs "27.1") (org "9.1") (lf "1.0") (dad-joke "1.4") (seq "2.0") (lolcat "0"))
+;; Package-Requires: ((s "1.13.1") (dash "2.18.1") (emacs "27.1") (org "9.1") (lf "1.0") (seq "2.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -15,35 +15,31 @@
 ;;
 ;;; Code:
 
-(require 's) ;; “The long lost Emacs string manipulation library”
-(require 'dash) ;; “A modern list library for Emacs”
-(require 'subr-x) ;; Extra Lisp functions; e.g., ‘when-let’.
-(require 'cl-lib) ;; New Common Lisp library; ‘cl-???’ forms.
-
-(require 'cus-edit) ;; To get the custom-* faces
-
-(require 'org)
-(require 'ox-latex)
-(require 'ox-html)
-(require 'seq)
-
+(require 'cl-lib)
+(require 'dash)
 (require 'lf)
+(require 'org)
+(require 'ox-html)
+(require 'ox-latex)
+(require 's)
+(require 'seq)
+(require 'subr-x)
 
-(defconst org-special-block-extras-version (package-get-version))
+(defconst org-defblock-version (package-get-version))
 
-(defun org-special-block-extras-version ()
+(defun org-defblock-version ()
   "Print the current version of the package in the minibuffer."
   (interactive)
-  (message org-special-block-extras-version))
+  (message org-defblock-version))
 
 ;;;###autoload
-(define-minor-mode org-special-block-extras-mode
+(define-minor-mode org-defblock-mode
   "Provide 30 new custom blocks & 34 link types for Org-mode.
 
 All relevant Lisp functions are prefixed ‘org-’; e.g., `org-docs-insert'."
   :lighter
   " OSPE"
-  (if org-special-block-extras-mode
+  (if org-defblock-mode
       (progn
         ;; https://orgmode.org/manual/Advanced-Export-Configuration.html
         (add-hook
@@ -56,33 +52,33 @@ All relevant Lisp functions are prefixed ‘org-’; e.g., `org-docs-insert'."
 ;; We define a parent keymap that org-deflink keymaps inherit from.
 ;; We also define a few useful functions that we then bind to this parent map.
 
-(defvar org-special-block-extras-mode-map (make-keymap)
+(defvar org-defblock-mode-map (make-keymap)
   "A keymap of actions, on link types, that is inherited by all `org-deflink' link keymaps.
 
 To learn about keymap inheritance, run:  C-h i m elisp RETURN m Inheritance and Keymaps RETURN.
 
 This keymap has the following bindings setup:
 
-    (define-key org-special-block-extras-mode-map (kbd \"C-n\") #'org-this-link-next)
-    (define-key org-special-block-extras-mode-map (kbd \"C-p\") #'org-this-link-previous)
-    (define-key org-special-block-extras-mode-map (kbd \"C-h\") #'org-this-link-show-docs)
+    (define-key org-defblock-mode-map (kbd \"C-n\") #'org-this-link-next)
+    (define-key org-defblock-mode-map (kbd \"C-p\") #'org-this-link-previous)
+    (define-key org-defblock-mode-map (kbd \"C-h\") #'org-this-link-show-docs)
 
 The use of `C-n' and `C-p' may be a nuisance to some users, since they override `forward-line'
 and `previous-line' when the cursor is on an org-link type. As such, place something like the following
 in your initialisation file.
 
     ;; Use  C-c C-f  to move to the next link of the same link-type as the one under the cursor
-    (define-key org-special-block-extras-mode-map (kbd \"C-c C-f\") #'org-this-link-next)
+    (define-key org-defblock-mode-map (kbd \"C-c C-f\") #'org-this-link-next)
 
 Alternatively, if you don't find much value in these basic bindings, you can remove them all:
 
-    ;; Disable basic org-special-block-extras link keybindings
-    (setcdr org-special-block-extras-mode-map nil)
+    ;; Disable basic org-defblock link keybindings
+    (setcdr org-defblock-mode-map nil)
 
     ;; Or, remove a single binding
-    (define-key org-special-block-extras-mode-map (kbd \"C-n\") nil)")
+    (define-key org-defblock-mode-map (kbd \"C-n\") nil)")
 
-(defvar org-special-block-extras-mode-map--link-keymap-docs nil
+(defvar org-defblock-mode-map--link-keymap-docs nil
   "An alist referencing key bindings for Org links; used in `org-this-link-show-docs'.")
 
 (defun org-link-at-point ()
@@ -127,7 +123,7 @@ Alternatively, if you don't find much value in these basic bindings, you can rem
            (pp-to-string
             (cdr
              (assoc
-              link org-special-block-extras-mode-map--link-keymap-docs))))))
+              link org-defblock-mode-map--link-keymap-docs))))))
        ;; i.e., insist on displaying in a dedicated buffer
        (max-mini-window-height 0))
     (display-message-or-buffer msg)
@@ -137,11 +133,11 @@ Alternatively, if you don't find much value in these basic bindings, you can rem
     (local-set-key "q" #'kill-buffer-and-window)
     (message "Read-only; “q” to kill buffer and window.")))
 
-(define-key org-special-block-extras-mode-map (kbd "C-n") #'org-this-link-next)
+(define-key org-defblock-mode-map (kbd "C-n") #'org-this-link-next)
 (define-key
- org-special-block-extras-mode-map (kbd "C-p") #'org-this-link-previous)
+ org-defblock-mode-map (kbd "C-p") #'org-this-link-previous)
 (define-key
- org-special-block-extras-mode-map (kbd "C-h") #'org-this-link-show-docs)
+ org-defblock-mode-map (kbd "C-h") #'org-this-link-show-docs)
 
 
 (defvar org--supported-blocks nil
@@ -414,7 +410,7 @@ BACKEND is the export back-end being used, as a symbol."
            ,main-arg
            ,@
            (--map (list 'quote it) kwdargs))))
-       ;; See: https://github.com/alhassy/org-special-block-extras/issues/8
+       ;; See: https://github.com/alhassy/org-special-blocks-extras/issues/8
        ;; (indent-region blk-start (point) blk-column) ;; Actually, this may be needed...
        ;; (indent-line-to blk-column) ;; #+end...
        ;; (goto-char blk-start) (indent-line-to blk-column) ;; #+begin...
