@@ -268,9 +268,14 @@ Three example uses:
   (cl-assert (or (stringp docstring) (null docstring)))
   (cl-assert (or (symbolp backend-type) (null backend-type)))
 
-  (let ((main-arg-name (or (cl-first kwds) 'main-arg))
-        (main-arg-value (cl-second kwds))
-        (kwds (cddr kwds)))
+  (let* ((main-arg-name (or (cl-first kwds) 'main-arg))
+         (main-arg-default (cl-second kwds))
+         (rest-kwds (cddr kwds))
+         ;; Combine main arg and rest keywords into a list of (variable default) pairs.
+         ;; We filter out any keyword-options (like :backend) from the rest-kwds.
+         (all-args (cons (list main-arg-name main-arg-default)
+                         (--reject (keywordp (car it))
+                                   (-partition 2 rest-kwds)))))
     ;; Unless we've already set the docs for the generic function, don't re-declare it.
     `(if ,(null body)
          (cl-defgeneric ,(intern (format "org-block/%s" name))
@@ -283,23 +288,30 @@ Three example uses:
                 `(eql ,backend-type)
               t))
           (raw-contents string)
-          &optional
-          ,main-arg-name
+          ;; Consume the positional argument passed by org--support-special-blocks-with-args,
+          ;; but ignore it to enforce the use of keys.
+          &optional _ignored-positional-arg
           &rest
           _
           &key
           (o-link? nil)
-          ,@
-          (--reject (keywordp (car it)) (-partition 2 kwds))
+          ;; Define all variables as keys with nil default to distinguish "missing" from "empty string".
+          ,@(mapcar (lambda (arg) (list (car arg) nil)) all-args)
           &allow-other-keys)
          ,docstring
-         ;; Use default for main argument
-         (when (and ',main-arg-name (s-blank-p ,main-arg-name))
-           (--if-let (plist-get
-                      (cdr (assoc ',name org--header-args))
-                      :main-arg)
-               (setq ,main-arg-name it)
-             (setq ,main-arg-name ,main-arg-value)))
+
+         ;; Resolve argument values: User Supplied > Header Arg > Static Default
+         ,@(mapcar
+            (lambda (arg)
+              (let ((var (car arg))
+                    (default (cadr arg)))
+                `(setq ,var
+                       (or ,var
+                           (plist-get
+                            (cdr (assoc ',name org--header-args))
+                            ,(intern (format ":%s" var)))
+                           ,default))))
+            all-args)
 
          (cl-letf
              (((symbol-function 'org-export)
@@ -316,16 +328,6 @@ Three example uses:
                    (format "\n#+end_export\n%s\n#+begin_export %s\n"
                            x
                            backend)))))
-
-           ;; Use any headers for this block type, if no local value is passed
-           ,@
-           (cl-loop
-            for k in (mapcar #'car (-partition 2 kwds)) collect
-            `(--when-let (plist-get
-                          (cdr (assoc ',name org--header-args))
-                          ,(intern (format ":%s" k)))
-               (when (s-blank-p ,k)
-                 (setq ,k it))))
 
            (org-export
             (let ((contents (org-parse raw-contents)))
