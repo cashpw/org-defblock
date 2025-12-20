@@ -1,6 +1,6 @@
 :PROPERTIES:
-:LAST_MODIFIED: [2025-12-19 Fri 11:37]
+:LAST_MODIFIED: [2025-12-20 Sat 06:21]
 :END:
 #+title: org-defblock
 
-A fork of [alhassy/org-special-block-extras](https://github.com/alhassy/org-special-block-extras]) which just provides `org-defblock`.
+A fork of [[https://github.com/alhassy/org-special-block-extras][alhassy/org-special-block-extras]] which just provides =org-defblock=.
